@@ -1,4 +1,5 @@
 import { DateTime } from "luxon";
+import { isDayAvailable } from "@/lib/host-days";
 import { getCalendarForHost } from "@/lib/google-client";
 import { formatDisplayTime, parseTimeString } from "@/lib/time-utils";
 import type { BookingData } from "@/types/booking";
@@ -91,6 +92,11 @@ function generateSlotsForDay(
   config: HostScheduleConfig,
   busy: BusyPeriod[],
 ): string[] {
+  const dateInTz = DateTime.fromISO(dateKey, { zone: config.timezone });
+  if (!isDayAvailable(dateInTz.weekday, config.availableDays)) {
+    return [];
+  }
+
   const { hours: workStartHour, minutes: workStartMinute } = parseTimeValue(
     config.workingHoursStart,
   );
@@ -153,6 +159,11 @@ export async function isSlotAvailable(
   dateKey: string,
   time: string,
 ): Promise<boolean> {
+  const dateInTz = DateTime.fromISO(dateKey, { zone: config.timezone });
+  if (!isDayAvailable(dateInTz.weekday, config.availableDays)) {
+    return false;
+  }
+
   const { hours, minutes } = parseTimeString(time);
   const { start, end } = slotToUtcRange(
     dateKey,

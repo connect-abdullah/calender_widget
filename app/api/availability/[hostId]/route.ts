@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAvailability } from "@/lib/google-calendar";
-import { getHostById, hostToScheduleConfig } from "@/lib/hosts";
+import { fetchHostAvailability } from "@/lib/availability-service";
 
 export async function GET(
   request: NextRequest,
@@ -19,16 +18,16 @@ export async function GET(
       );
     }
 
-    const host = await getHostById(hostId);
-    if (!host) {
-      return NextResponse.json({ message: "Host not found" }, { status: 404 });
-    }
+    const availability = await fetchHostAvailability(hostId, start, end);
 
-    const config = hostToScheduleConfig(host);
-    const availability = await getAvailability(config, start, end);
-    return NextResponse.json(availability);
+    return NextResponse.json(availability, {
+      headers: {
+        "Cache-Control": "private, max-age=60, stale-while-revalidate=120",
+      },
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to fetch availability";
-    return NextResponse.json({ message }, { status: 500 });
+    const status = message === "Host not found" ? 404 : 500;
+    return NextResponse.json({ message }, { status });
   }
 }

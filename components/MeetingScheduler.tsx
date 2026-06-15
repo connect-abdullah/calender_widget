@@ -8,11 +8,15 @@ import { CalendarGrid } from "@/components/CalendarGrid";
 import { ConfirmationScreen } from "@/components/ConfirmationScreen";
 import { MeetingInfoCard } from "@/components/MeetingInfoCard";
 import { TimeSlots } from "@/components/TimeSlots";
-import { availability as fallbackAvailability, DEFAULT_TIMEZONES } from "@/constants/availability";
+import { DEFAULT_TIMEZONES } from "@/constants/availability";
 import { formatDateKey } from "@/lib/calendar-utils";
+import {
+  getAvailabilityWithFallback,
+  useHostAvailability,
+} from "@/lib/hooks/use-host-availability";
 import { cn } from "@/lib/utils";
 import { useBookingStore } from "@/store/booking-store";
-import type { AvailabilityMap, MeetingSchedulerProps } from "@/types/scheduling";
+import type { MeetingSchedulerProps } from "@/types/scheduling";
 
 const slideVariants = {
   enter: (direction: number) => ({
@@ -39,16 +43,45 @@ export function MeetingScheduler({
   hostId,
   meeting,
   availability: availabilityProp,
+  initialAvailability: initialAvailabilityProp,
+  prefetchMonth,
   defaultTimezone = "Asia/Karachi",
   onDateSelect,
   onTimeSelect,
 }: MeetingSchedulerProps) {
+  const initialAvailability = initialAvailabilityProp ?? availabilityProp;
   const [currentMonth, setCurrentMonth] = useState(() => new Date());
   const [direction, setDirection] = useState(0);
-  const [availability, setAvailability] = useState<AvailabilityMap>(availabilityProp ?? {});
-  const [isLoadingAvailability, setIsLoadingAvailability] = useState(false);
-  const [availabilityError, setAvailabilityError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  const year = currentMonth.getFullYear();
+  const month = currentMonth.getMonth();
+
+  const {
+    data: availabilityData,
+    isLoading: isLoadingAvailability,
+    isFetching: isFetchingAvailability,
+    isError: isAvailabilityError,
+    error: availabilityQueryError,
+  } = useHostAvailability({
+    hostId,
+    year,
+    month,
+    initialAvailability,
+    prefetchMonth,
+  });
+
+  const { availability, usedFallback } = getAvailabilityWithFallback(
+    availabilityData,
+    isAvailabilityError,
+  );
+
+  const availabilityError =
+    isAvailabilityError && availabilityQueryError
+      ? availabilityQueryError.message
+      : usedFallback
+        ? "Could not load live availability"
+        : null;
 
   const {
     step,
@@ -80,60 +113,6 @@ export function MeetingScheduler({
       containerRef.current.focus();
     }
   }, [step]);
-
-  useEffect(() => {
-    if (availabilityProp) {
-      setAvailability(availabilityProp);
-      return;
-    }
-
-    if (!hostId) return;
-
-    const year = currentMonth.getFullYear();
-    const month = currentMonth.getMonth();
-    const start = formatDateKey(new Date(year, month, 1));
-    const end = formatDateKey(new Date(year, month + 1, 0));
-
-    let cancelled = false;
-
-    async function fetchAvailability() {
-      setIsLoadingAvailability(true);
-      setAvailabilityError(null);
-
-      try {
-        const res = await fetch(
-          `/api/availability/${hostId}?start=${start}&end=${end}&tz=${encodeURIComponent(timezone)}`,
-        );
-
-        if (!res.ok) {
-          const err = (await res.json().catch(() => ({}))) as { message?: string };
-          throw new Error(err.message ?? "Failed to load availability");
-        }
-
-        const data = (await res.json()) as AvailabilityMap;
-        if (!cancelled) {
-          setAvailability(data);
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setAvailabilityError(
-            err instanceof Error ? err.message : "Failed to load availability",
-          );
-          setAvailability(fallbackAvailability);
-        }
-      } finally {
-        if (!cancelled) {
-          setIsLoadingAvailability(false);
-        }
-      }
-    }
-
-    fetchAvailability();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [currentMonth, timezone, availabilityProp, hostId]);
 
   const slotsForSelectedDate = useMemo(() => {
     if (!selectedDate) return [];
@@ -243,9 +222,14 @@ export function MeetingScheduler({
                   onDateSelect={handleDateSelect}
                 />
 
+                {isFetchingAvailability && !isLoadingAvailability && (
+                  <p className="mt-2 text-xs text-neutral-400" role="status" aria-live="polite">
+                    Updating…
+                  </p>
+                )}
                 {isLoadingAvailability && (
                   <p className="mt-2 text-xs text-neutral-500" role="status" aria-live="polite">
-                    Loading availability...
+                    Loading availability…
                   </p>
                 )}
                 {availabilityError && (

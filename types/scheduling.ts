@@ -19,7 +19,10 @@ export interface AvailabilityMap {
 export interface MeetingSchedulerProps {
   hostId?: string;
   meeting: MeetingDetails;
+  /** @deprecated use initialAvailability */
   availability?: AvailabilityMap;
+  initialAvailability?: AvailabilityMap;
+  prefetchMonth?: { year: number; month: number };
   defaultTimezone?: string;
   onDateSelect?: (date: Date) => void;
   onTimeSelect?: (date: Date, time: string) => void;
