@@ -17,6 +17,7 @@ export interface AvailabilityMap {
 }
 
 export interface MeetingSchedulerProps {
+  hostId?: string;
   meeting: MeetingDetails;
   availability?: AvailabilityMap;
   defaultTimezone?: string;

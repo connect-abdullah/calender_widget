@@ -1,56 +1,55 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createHost, updateHostTokens } from "@/lib/hosts";
 import { getOAuthClientForAuth } from "@/lib/google-client";
+import type { NewHostPayload } from "@/types/host";
 
 export async function GET(request: NextRequest) {
   const code = request.nextUrl.searchParams.get("code");
+  const state = request.nextUrl.searchParams.get("state");
   const error = request.nextUrl.searchParams.get("error");
 
   if (error) {
-    return new NextResponse(`Authorization failed: ${error}`, { status: 400 });
+    return NextResponse.redirect(new URL(`/admin?error=${encodeURIComponent(error)}`, request.url));
   }
 
-  if (!code) {
-    return new NextResponse("Missing authorization code", { status: 400 });
+  if (!code || !state) {
+    return NextResponse.json({ message: "Missing code or state" }, { status: 400 });
   }
 
-  const oauth2 = getOAuthClientForAuth();
-  const { tokens } = await oauth2.getToken(code);
+  try {
+    const oauth2 = getOAuthClientForAuth();
+    const { tokens } = await oauth2.getToken(code);
 
-  if (tokens.refresh_token) {
-    console.log("GOOGLE_REFRESH_TOKEN:", tokens.refresh_token);
-  } else {
-    console.log("No refresh token returned. Revoke app access and try again with prompt=consent.");
+    if (!tokens.refresh_token) {
+      return NextResponse.redirect(
+        new URL(
+          "/admin?error=" +
+            encodeURIComponent("No refresh token received. Revoke app access and try again."),
+          request.url,
+        ),
+      );
+    }
+
+    const calendarId = "primary";
+
+    if (state.startsWith("reconnect:")) {
+      const hostId = state.replace("reconnect:", "");
+      await updateHostTokens(hostId, tokens.refresh_token, calendarId);
+      return NextResponse.redirect(new URL(`/admin?reconnected=${hostId}`, request.url));
+    }
+
+    if (state.startsWith("new:")) {
+      const payloadB64 = state.replace("new:", "");
+      const payloadJson = Buffer.from(payloadB64, "base64url").toString("utf8");
+      const payload = JSON.parse(payloadJson) as NewHostPayload;
+
+      const host = await createHost(payload, tokens.refresh_token, calendarId);
+      return NextResponse.redirect(new URL(`/admin?created=${host.id}`, request.url));
+    }
+
+    return NextResponse.json({ message: "Invalid state parameter" }, { status: 400 });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "OAuth callback failed";
+    return NextResponse.redirect(new URL(`/admin?error=${encodeURIComponent(message)}`, request.url));
   }
-
-  const refreshToken = tokens.refresh_token ?? "No refresh token received — revoke access and retry.";
-
-  const html = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <title>Google Calendar Connected</title>
-  <style>
-    body { font-family: system-ui, sans-serif; max-width: 640px; margin: 48px auto; padding: 0 24px; color: #171717; }
-    h1 { font-size: 1.5rem; }
-    pre { background: #f5f5f5; padding: 16px; border-radius: 8px; overflow-x: auto; word-break: break-all; font-size: 13px; }
-    ol { line-height: 1.8; }
-    code { background: #f5f5f5; padding: 2px 6px; border-radius: 4px; font-size: 13px; }
-  </style>
-</head>
-<body>
-  <h1>Google Calendar Connected</h1>
-  <p>Copy this refresh token into your <code>.env.local</code> file:</p>
-  <pre id="token">${refreshToken}</pre>
-  <button onclick="navigator.clipboard.writeText(document.getElementById('token').textContent)">Copy token</button>
-  <ol>
-    <li>Add <code>GOOGLE_REFRESH_TOKEN=&lt;token&gt;</code> to <code>.env.local</code></li>
-    <li>Restart the dev server</li>
-    <li>Go to <a href="/">the booking page</a></li>
-  </ol>
-</body>
-</html>`;
-
-  return new NextResponse(html, {
-    headers: { "Content-Type": "text/html" },
-  });
 }

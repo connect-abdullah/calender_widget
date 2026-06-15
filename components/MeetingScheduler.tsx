@@ -36,6 +36,7 @@ const confirmationVariants = {
 };
 
 export function MeetingScheduler({
+  hostId,
   meeting,
   availability: availabilityProp,
   defaultTimezone = "Asia/Karachi",
@@ -58,10 +59,17 @@ export function MeetingScheduler({
     setSelectedDate,
     setSelectedTime,
     setTimezone,
+    setHostId,
     goToDetails,
     goBackToDateTime,
     reset,
   } = useBookingStore();
+
+  useEffect(() => {
+    if (hostId) {
+      setHostId(hostId);
+    }
+  }, [hostId, setHostId]);
 
   useEffect(() => {
     setTimezone(defaultTimezone);
@@ -79,6 +87,8 @@ export function MeetingScheduler({
       return;
     }
 
+    if (!hostId) return;
+
     const year = currentMonth.getFullYear();
     const month = currentMonth.getMonth();
     const start = formatDateKey(new Date(year, month, 1));
@@ -92,7 +102,7 @@ export function MeetingScheduler({
 
       try {
         const res = await fetch(
-          `/api/availability?start=${start}&end=${end}&tz=${encodeURIComponent(timezone)}`,
+          `/api/availability/${hostId}?start=${start}&end=${end}&tz=${encodeURIComponent(timezone)}`,
         );
 
         if (!res.ok) {
@@ -123,7 +133,7 @@ export function MeetingScheduler({
     return () => {
       cancelled = true;
     };
-  }, [currentMonth, timezone, availabilityProp]);
+  }, [currentMonth, timezone, availabilityProp, hostId]);
 
   const slotsForSelectedDate = useMemo(() => {
     if (!selectedDate) return [];

@@ -5,6 +5,7 @@ import type { BookingData, BookingStep } from "@/types/booking";
 import type { BookingFormSchema } from "@/lib/booking-schema";
 
 interface BookingState {
+  hostId: string | null;
   step: BookingStep;
   selectedDate: Date | null;
   selectedTime: string | null;
@@ -14,6 +15,7 @@ interface BookingState {
   isSubmitting: boolean;
   error: string | null;
 
+  setHostId: (hostId: string) => void;
   setStep: (step: BookingStep) => void;
   setSelectedDate: (date: Date | null) => void;
   setSelectedTime: (time: string | null) => void;
@@ -33,6 +35,7 @@ const initialFormValues: BookingFormSchema = {
 };
 
 export const useBookingStore = create<BookingState>((set, get) => ({
+  hostId: null,
   step: "datetime",
   selectedDate: null,
   selectedTime: null,
@@ -41,6 +44,8 @@ export const useBookingStore = create<BookingState>((set, get) => ({
   confirmedBooking: null,
   isSubmitting: false,
   error: null,
+
+  setHostId: (hostId) => set({ hostId }),
 
   setStep: (step) => set({ step }),
 
@@ -66,7 +71,11 @@ export const useBookingStore = create<BookingState>((set, get) => ({
   goBackToDateTime: () => set({ step: "datetime", error: null }),
 
   submitBookingForm: async (values) => {
-    const { selectedDate, selectedTime, timezone } = get();
+    const { hostId, selectedDate, selectedTime, timezone } = get();
+    if (!hostId) {
+      set({ error: "Missing host configuration." });
+      return;
+    }
     if (!selectedDate || !selectedTime) return;
 
     set({ isSubmitting: true, error: null, formValues: values });
@@ -82,7 +91,7 @@ export const useBookingStore = create<BookingState>((set, get) => ({
     };
 
     try {
-      await submitBooking(bookingData);
+      await submitBooking(hostId, bookingData);
       set({
         confirmedBooking: bookingData,
         step: "confirmation",
@@ -97,7 +106,8 @@ export const useBookingStore = create<BookingState>((set, get) => ({
   },
 
   reset: () =>
-    set({
+    set((state) => ({
+      hostId: state.hostId,
       step: "datetime",
       selectedDate: null,
       selectedTime: null,
@@ -106,5 +116,5 @@ export const useBookingStore = create<BookingState>((set, get) => ({
       confirmedBooking: null,
       isSubmitting: false,
       error: null,
-    }),
+    })),
 }));

@@ -1,13 +1,9 @@
 import { DateTime } from "luxon";
-import { getCalendar, getGoogleCalendarId, getGoogleTimezone } from "@/lib/google-client";
+import { getCalendarForHost } from "@/lib/google-client";
 import { formatDisplayTime, parseTimeString } from "@/lib/time-utils";
 import type { BookingData } from "@/types/booking";
+import type { HostScheduleConfig } from "@/types/host";
 import type { AvailabilityMap } from "@/types/scheduling";
-
-const WORK_START = 9;
-const WORK_END = 17;
-const SLOT_DURATION = 30;
-const MEETING_DURATION = 30;
 
 interface BusyPeriod {
   start: number;
@@ -17,6 +13,11 @@ interface BusyPeriod {
 function parseDateKey(dateKey: string): { year: number; month: number; day: number } {
   const [year, month, day] = dateKey.split("-").map(Number);
   return { year, month, day };
+}
+
+function parseTimeValue(time: string): { hours: number; minutes: number } {
+  const [h, m] = time.split(":").map(Number);
+  return { hours: h, minutes: m };
 }
 
 export function toIsoDateTime(dateKey: string, time: string, timezone: string): string {
@@ -63,20 +64,20 @@ function enumerateDateKeys(startDate: string, endDate: string): string[] {
 }
 
 async function fetchBusyPeriods(
+  config: HostScheduleConfig,
   timeMin: string,
   timeMax: string,
-  calendarId: string,
 ): Promise<BusyPeriod[]> {
-  const calendar = getCalendar();
+  const calendar = getCalendarForHost(config.refreshToken);
   const response = await calendar.freebusy.query({
     requestBody: {
       timeMin,
       timeMax,
-      items: [{ id: calendarId }],
+      items: [{ id: config.calendarId }],
     },
   });
 
-  const busy = response.data.calendars?.[calendarId]?.busy ?? [];
+  const busy = response.data.calendars?.[config.calendarId]?.busy ?? [];
   return busy
     .filter((b) => b.start && b.end)
     .map((b) => ({
@@ -87,24 +88,34 @@ async function fetchBusyPeriods(
 
 function generateSlotsForDay(
   dateKey: string,
-  timezone: string,
+  config: HostScheduleConfig,
   busy: BusyPeriod[],
 ): string[] {
+  const { hours: workStartHour, minutes: workStartMinute } = parseTimeValue(
+    config.workingHoursStart,
+  );
+  const { hours: workEndHour, minutes: workEndMinute } = parseTimeValue(config.workingHoursEnd);
+
+  const workStartMinutes = workStartHour * 60 + workStartMinute;
+  const workEndMinutes = workEndHour * 60 + workEndMinute;
+  const slotDuration = config.meetingDurationMinutes;
+
   const slots: string[] = [];
 
-  for (let hour = WORK_START; hour < WORK_END; hour++) {
-    for (let minute = 0; minute < 60; minute += SLOT_DURATION) {
-      const slotEndHour = hour + (minute + SLOT_DURATION) / 60;
-      const slotEndMinute = (minute + SLOT_DURATION) % 60;
-      const slotEndHourInt = Math.floor(slotEndHour);
-      if (slotEndHourInt > WORK_END || (slotEndHourInt === WORK_END && slotEndMinute > 0)) {
-        continue;
-      }
+  for (let total = workStartMinutes; total + slotDuration <= workEndMinutes; total += slotDuration) {
+    const hour = Math.floor(total / 60);
+    const minute = total % 60;
 
-      const { start, end } = slotToUtcRange(dateKey, hour, minute, timezone, SLOT_DURATION);
-      if (!overlapsBusy(start, end, busy)) {
-        slots.push(formatDisplayTime(hour, minute));
-      }
+    const { start, end } = slotToUtcRange(
+      dateKey,
+      hour,
+      minute,
+      config.timezone,
+      slotDuration,
+    );
+
+    if (!overlapsBusy(start, end, busy)) {
+      slots.push(formatDisplayTime(hour, minute));
     }
   }
 
@@ -112,26 +123,23 @@ function generateSlotsForDay(
 }
 
 export async function getAvailability(
+  config: HostScheduleConfig,
   startDate: string,
   endDate: string,
-  timezone?: string,
 ): Promise<AvailabilityMap> {
-  const tz = timezone ?? getGoogleTimezone();
-  const calendarId = getGoogleCalendarId();
-
-  const rangeStart = DateTime.fromISO(startDate, { zone: tz }).startOf("day");
-  const rangeEnd = DateTime.fromISO(endDate, { zone: tz }).endOf("day");
+  const rangeStart = DateTime.fromISO(startDate, { zone: config.timezone }).startOf("day");
+  const rangeEnd = DateTime.fromISO(endDate, { zone: config.timezone }).endOf("day");
 
   const busy = await fetchBusyPeriods(
+    config,
     rangeStart.toUTC().toISO()!,
     rangeEnd.toUTC().toISO()!,
-    calendarId,
   );
 
   const availability: AvailabilityMap = {};
 
   for (const dateKey of enumerateDateKeys(startDate, endDate)) {
-    const slots = generateSlotsForDay(dateKey, tz, busy);
+    const slots = generateSlotsForDay(dateKey, config, busy);
     if (slots.length > 0) {
       availability[dateKey] = slots;
     }
@@ -141,30 +149,33 @@ export async function getAvailability(
 }
 
 export async function isSlotAvailable(
+  config: HostScheduleConfig,
   dateKey: string,
   time: string,
-  timezone: string,
-  durationMinutes: number = MEETING_DURATION,
 ): Promise<boolean> {
   const { hours, minutes } = parseTimeString(time);
-  const { start, end } = slotToUtcRange(dateKey, hours, minutes, timezone, durationMinutes);
+  const { start, end } = slotToUtcRange(
+    dateKey,
+    hours,
+    minutes,
+    config.timezone,
+    config.meetingDurationMinutes,
+  );
 
   const rangeStart = DateTime.fromMillis(start).minus({ minutes: 1 }).toUTC().toISO()!;
   const rangeEnd = DateTime.fromMillis(end).plus({ minutes: 1 }).toUTC().toISO()!;
 
-  const busy = await fetchBusyPeriods(rangeStart, rangeEnd, getGoogleCalendarId());
+  const busy = await fetchBusyPeriods(config, rangeStart, rangeEnd);
   return !overlapsBusy(start, end, busy);
 }
 
 export async function createBooking(
+  config: HostScheduleConfig,
   data: BookingData,
-  meetingTitle: string = "30 Minute Meeting",
-  durationMinutes: number = MEETING_DURATION,
 ): Promise<{ eventId: string }> {
-  const calendarId = getGoogleCalendarId();
-  const calendar = getCalendar();
+  const calendar = getCalendarForHost(config.refreshToken);
 
-  const available = await isSlotAvailable(data.date, data.time, data.timezone, durationMinutes);
+  const available = await isSlotAvailable(config, data.date, data.time);
   if (!available) {
     throw new Error("This time slot is no longer available. Please choose another time.");
   }
@@ -175,7 +186,7 @@ export async function createBooking(
   const endDt = DateTime.fromObject(
     { year, month, day, hour: hours, minute: minutes },
     { zone: data.timezone },
-  ).plus({ minutes: durationMinutes });
+  ).plus({ minutes: config.meetingDurationMinutes });
   const endIso = endDt.toFormat("yyyy-MM-dd'T'HH:mm:ss");
 
   const attendees = [
@@ -184,10 +195,10 @@ export async function createBooking(
   ];
 
   const response = await calendar.events.insert({
-    calendarId,
+    calendarId: config.calendarId,
     sendUpdates: "all",
     requestBody: {
-      summary: meetingTitle,
+      summary: config.meetingTitle ?? `${config.meetingDurationMinutes} Minute Meeting`,
       description: data.notes,
       start: { dateTime: startIso, timeZone: data.timezone },
       end: { dateTime: endIso, timeZone: data.timezone },

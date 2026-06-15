@@ -1,0 +1,3 @@
+export default function WidgetLayout({ children }: { children: React.ReactNode }) {
+  return <div className="min-h-screen w-full bg-neutral-50">{children}</div>;
+}
