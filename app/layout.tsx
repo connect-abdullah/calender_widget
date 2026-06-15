@@ -8,8 +8,9 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Meeting Scheduler",
-  description: "Schedule a meeting — Calendly-style scheduling component",
+  title: "SchedulerApp",
+  description:
+    "SchedulerApp — embeddable meeting scheduling widgets powered by Google Calendar.",
 };
 
 export default function RootLayout({
