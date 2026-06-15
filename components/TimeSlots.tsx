@@ -6,6 +6,7 @@ interface TimeSlotsProps {
   date: Date;
   slots: string[];
   selectedTime: string | null;
+  isLoading?: boolean;
   onTimeSelect: (time: string) => void;
   showNext?: boolean;
   onNext?: () => void;
@@ -15,6 +16,7 @@ export function TimeSlots({
   date,
   slots,
   selectedTime,
+  isLoading = false,
   onTimeSelect,
   showNext = false,
   onNext,
@@ -32,7 +34,11 @@ export function TimeSlots({
         <p className="mt-0.5 text-xs text-neutral-500">Select a time</p>
       </div>
 
-      {slots.length === 0 ? (
+      {isLoading ? (
+        <p className="text-sm text-neutral-500" role="status" aria-live="polite">
+          Loading times…
+        </p>
+      ) : slots.length === 0 ? (
         <p className="text-sm text-neutral-500" role="status">
           No available times for this date.
         </p>

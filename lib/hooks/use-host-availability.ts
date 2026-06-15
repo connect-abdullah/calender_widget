@@ -1,48 +1,74 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { availability as fallbackAvailability } from "@/constants/availability";
+import { monthAvailability as fallbackMonthAvailability, availability as fallbackDaySlots } from "@/constants/availability";
 import {
-  availabilityQueryKey,
-  fetchAvailabilityClient,
+  daySlotsQueryKey,
+  fetchDaySlotsClient,
+  fetchMonthAvailabilityClient,
+  monthAvailabilityQueryKey,
 } from "@/lib/queries/availability";
-import type { AvailabilityMap } from "@/types/scheduling";
+import type { DaySlots, MonthAvailabilityMap } from "@/types/scheduling";
 
-interface UseHostAvailabilityOptions {
+interface UseHostMonthAvailabilityOptions {
   hostId?: string;
   year: number;
   month: number;
-  initialAvailability?: AvailabilityMap;
+  initialMonthAvailability?: MonthAvailabilityMap;
   prefetchMonth?: { year: number; month: number };
 }
 
-export function useHostAvailability({
+export function useHostMonthAvailability({
   hostId,
   year,
   month,
-  initialAvailability,
+  initialMonthAvailability,
   prefetchMonth,
-}: UseHostAvailabilityOptions) {
+}: UseHostMonthAvailabilityOptions) {
   const isPrefetchMonth =
     prefetchMonth?.year === year && prefetchMonth?.month === month;
 
   return useQuery({
-    queryKey: availabilityQueryKey(hostId ?? "", year, month),
-    queryFn: () => fetchAvailabilityClient(hostId!, year, month),
+    queryKey: monthAvailabilityQueryKey(hostId ?? "", year, month),
+    queryFn: () => fetchMonthAvailabilityClient(hostId!, year, month),
     enabled: !!hostId,
     staleTime: 60_000,
     gcTime: 5 * 60_000,
     initialData:
-      isPrefetchMonth && initialAvailability ? initialAvailability : undefined,
+      isPrefetchMonth && initialMonthAvailability ? initialMonthAvailability : undefined,
     placeholderData: (previous) => previous,
   });
 }
 
-export function getAvailabilityWithFallback(
-  data: AvailabilityMap | undefined,
+export function useDaySlots(hostId: string | undefined, dateKey: string | null) {
+  return useQuery({
+    queryKey: daySlotsQueryKey(hostId ?? "", dateKey ?? ""),
+    queryFn: () => fetchDaySlotsClient(hostId!, dateKey!),
+    enabled: !!hostId && !!dateKey,
+    staleTime: 60_000,
+    gcTime: 5 * 60_000,
+  });
+}
+
+export function getMonthAvailabilityWithFallback(
+  data: MonthAvailabilityMap | undefined,
   isError: boolean,
-): { availability: AvailabilityMap; usedFallback: boolean } {
-  if (data) return { availability: data, usedFallback: false };
-  if (isError) return { availability: fallbackAvailability, usedFallback: true };
-  return { availability: {}, usedFallback: false };
+): { monthAvailability: MonthAvailabilityMap; usedFallback: boolean } {
+  if (data) return { monthAvailability: data, usedFallback: false };
+  if (isError) {
+    return { monthAvailability: fallbackMonthAvailability, usedFallback: true };
+  }
+  return { monthAvailability: {}, usedFallback: false };
+}
+
+export function getDaySlotsWithFallback(
+  data: DaySlots | undefined,
+  isError: boolean,
+  dateKey: string | null,
+): { slots: DaySlots; usedFallback: boolean } {
+  if (data) return { slots: data, usedFallback: false };
+  if (isError && dateKey) {
+    return { slots: fallbackDaySlots[dateKey] ?? [], usedFallback: true };
+  }
+  return { slots: [], usedFallback: false };
 }

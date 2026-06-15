@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { BookingForm } from "@/components/BookingForm";
 import { BookingSummaryCard } from "@/components/BookingSummaryCard";
@@ -11,8 +11,10 @@ import { TimeSlots } from "@/components/TimeSlots";
 import { DEFAULT_TIMEZONES } from "@/constants/availability";
 import { formatDateKey } from "@/lib/calendar-utils";
 import {
-  getAvailabilityWithFallback,
-  useHostAvailability,
+  getDaySlotsWithFallback,
+  getMonthAvailabilityWithFallback,
+  useDaySlots,
+  useHostMonthAvailability,
 } from "@/lib/hooks/use-host-availability";
 import { cn } from "@/lib/utils";
 import { useBookingStore } from "@/store/booking-store";
@@ -42,14 +44,12 @@ const confirmationVariants = {
 export function MeetingScheduler({
   hostId,
   meeting,
-  availability: availabilityProp,
-  initialAvailability: initialAvailabilityProp,
+  initialMonthAvailability,
   prefetchMonth,
   defaultTimezone = "Asia/Karachi",
   onDateSelect,
   onTimeSelect,
 }: MeetingSchedulerProps) {
-  const initialAvailability = initialAvailabilityProp ?? availabilityProp;
   const [currentMonth, setCurrentMonth] = useState(() => new Date());
   const [direction, setDirection] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -58,28 +58,26 @@ export function MeetingScheduler({
   const month = currentMonth.getMonth();
 
   const {
-    data: availabilityData,
-    isLoading: isLoadingAvailability,
-    isFetching: isFetchingAvailability,
-    isError: isAvailabilityError,
-    error: availabilityQueryError,
-  } = useHostAvailability({
+    data: monthAvailabilityData,
+    isLoading: isLoadingMonth,
+    isFetching: isFetchingMonth,
+    isError: isMonthError,
+    error: monthQueryError,
+  } = useHostMonthAvailability({
     hostId,
     year,
     month,
-    initialAvailability,
+    initialMonthAvailability,
     prefetchMonth,
   });
 
-  const { availability, usedFallback } = getAvailabilityWithFallback(
-    availabilityData,
-    isAvailabilityError,
-  );
+  const { monthAvailability, usedFallback: usedMonthFallback } =
+    getMonthAvailabilityWithFallback(monthAvailabilityData, isMonthError);
 
-  const availabilityError =
-    isAvailabilityError && availabilityQueryError
-      ? availabilityQueryError.message
-      : usedFallback
+  const monthError =
+    isMonthError && monthQueryError
+      ? monthQueryError.message
+      : usedMonthFallback
         ? "Could not load live availability"
         : null;
 
@@ -98,6 +96,20 @@ export function MeetingScheduler({
     reset,
   } = useBookingStore();
 
+  const selectedDateKey = selectedDate ? formatDateKey(selectedDate) : null;
+
+  const {
+    data: daySlotsData,
+    isLoading: isLoadingDaySlots,
+    isError: isDaySlotsError,
+  } = useDaySlots(hostId, selectedDateKey);
+
+  const { slots: daySlots } = getDaySlotsWithFallback(
+    daySlotsData,
+    isDaySlotsError,
+    selectedDateKey,
+  );
+
   useEffect(() => {
     if (hostId) {
       setHostId(hostId);
@@ -114,10 +126,9 @@ export function MeetingScheduler({
     }
   }, [step]);
 
-  const slotsForSelectedDate = useMemo(() => {
-    if (!selectedDate) return [];
-    return availability[formatDateKey(selectedDate)] ?? [];
-  }, [selectedDate, availability]);
+  useEffect(() => {
+    setSelectedTime(null);
+  }, [selectedDateKey, setSelectedTime]);
 
   const handleDateSelect = useCallback(
     (date: Date) => {
@@ -200,14 +211,11 @@ export function MeetingScheduler({
             transition={{ duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] }}
             className="flex flex-col md:flex-row"
           >
-            {/* Left Panel — Meeting Info */}
             <div className="border-b border-neutral-200 md:w-[280px] md:shrink-0 md:border-b-0 md:border-r">
               <MeetingInfoCard meeting={meeting} />
             </div>
 
-            {/* Center + Right Panels */}
             <div className="flex flex-1 flex-col md:flex-row">
-              {/* Center Panel — Calendar */}
               <div
                 className={cn(
                   "flex flex-1 flex-col p-6 md:p-8",
@@ -217,28 +225,27 @@ export function MeetingScheduler({
                 <CalendarGrid
                   currentMonth={currentMonth}
                   selectedDate={selectedDate}
-                  availability={availability}
+                  monthAvailability={monthAvailability}
                   onMonthChange={setCurrentMonth}
                   onDateSelect={handleDateSelect}
                 />
 
-                {isFetchingAvailability && !isLoadingAvailability && (
+                {isFetchingMonth && !isLoadingMonth && (
                   <p className="mt-2 text-xs text-neutral-400" role="status" aria-live="polite">
                     Updating…
                   </p>
                 )}
-                {isLoadingAvailability && (
+                {isLoadingMonth && (
                   <p className="mt-2 text-xs text-neutral-500" role="status" aria-live="polite">
                     Loading availability…
                   </p>
                 )}
-                {availabilityError && (
+                {monthError && (
                   <p className="mt-2 text-xs text-amber-600" role="alert">
-                    {availabilityError} — showing sample data.
+                    {monthError} — showing sample data.
                   </p>
                 )}
 
-                {/* Timezone Selector */}
                 <div className="mt-6 border-t border-neutral-100 pt-4">
                   <label htmlFor="timezone-select" className="sr-only">
                     Time zone
@@ -284,7 +291,6 @@ export function MeetingScheduler({
                 </div>
               </div>
 
-              {/* Right Panel — Time Slots */}
               <AnimatePresence>
                 {showTimePanel && selectedDate && (
                   <motion.div
@@ -299,8 +305,9 @@ export function MeetingScheduler({
                   >
                     <TimeSlots
                       date={selectedDate}
-                      slots={slotsForSelectedDate}
+                      slots={daySlots}
                       selectedTime={selectedTime}
+                      isLoading={isLoadingDaySlots}
                       onTimeSelect={handleTimeSelect}
                       showNext={canProceed}
                       onNext={handleNext}
@@ -321,7 +328,6 @@ export function MeetingScheduler({
             transition={{ duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] }}
             className="flex flex-col md:flex-row"
           >
-            {/* Left Panel — Booking Summary */}
             <div className="border-b border-neutral-200 md:w-[280px] md:shrink-0 md:border-b-0 md:border-r">
               {selectedDate && selectedTime && (
                 <BookingSummaryCard
@@ -334,7 +340,6 @@ export function MeetingScheduler({
               )}
             </div>
 
-            {/* Right Panel — Booking Form */}
             <div className="flex-1">
               <BookingForm />
             </div>

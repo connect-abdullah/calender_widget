@@ -1,9 +1,9 @@
 import { notFound } from "next/navigation";
 import { MeetingScheduler } from "@/components/MeetingScheduler";
-import { fetchHostAvailability } from "@/lib/availability-service";
+import { fetchHostMonthAvailability } from "@/lib/availability-service";
 import { getMonthRange } from "@/lib/queries/availability";
 import { getPublicHostById } from "@/lib/hosts";
-import type { AvailabilityMap } from "@/types/scheduling";
+import type { MonthAvailabilityMap } from "@/types/scheduling";
 
 interface WidgetPageProps {
   params: Promise<{ hostId: string }>;
@@ -21,9 +21,9 @@ export default async function WidgetPage({ params }: WidgetPageProps) {
   const prefetchMonth = { year: now.getFullYear(), month: now.getMonth() };
   const { start, end } = getMonthRange(prefetchMonth.year, prefetchMonth.month);
 
-  let initialAvailability: AvailabilityMap = {};
+  let initialMonthAvailability: MonthAvailabilityMap = {};
   try {
-    initialAvailability = await fetchHostAvailability(hostId, start, end);
+    initialMonthAvailability = await fetchHostMonthAvailability(hostId, start, end);
   } catch {
     // Client will fetch on mount if prefetch fails
   }
@@ -40,7 +40,7 @@ export default async function WidgetPage({ params }: WidgetPageProps) {
           meetingType: "video",
         }}
         defaultTimezone={host.timezone}
-        initialAvailability={initialAvailability}
+        initialMonthAvailability={initialMonthAvailability}
         prefetchMonth={prefetchMonth}
       />
     </main>

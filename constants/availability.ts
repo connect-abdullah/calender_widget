@@ -1,4 +1,4 @@
-import type { AvailabilityMap } from "@/types/scheduling";
+import type { AvailabilityMap, MonthAvailabilityMap } from "@/types/scheduling";
 
 export const availability: AvailabilityMap = {
   "2026-06-17": [
@@ -15,6 +15,10 @@ export const availability: AvailabilityMap = {
   "2026-06-20": ["9:00 AM", "9:30 AM", "10:00 AM", "2:00 PM", "4:00 PM"],
   "2026-06-24": ["11:00 AM", "11:30 AM", "12:00 PM", "3:00 PM"],
 };
+
+export const monthAvailability: MonthAvailabilityMap = Object.fromEntries(
+  Object.keys(availability).map((dateKey) => [dateKey, true]),
+);
 
 export const DEFAULT_TIMEZONES = [
   {

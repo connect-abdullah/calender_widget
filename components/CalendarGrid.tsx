@@ -9,12 +9,12 @@ import {
   isSameDay,
   WEEKDAY_LABELS,
 } from "@/lib/calendar-utils";
-import type { AvailabilityMap } from "@/types/scheduling";
+import type { MonthAvailabilityMap } from "@/types/scheduling";
 
 interface CalendarGridProps {
   currentMonth: Date;
   selectedDate: Date | null;
-  availability: AvailabilityMap;
+  monthAvailability: MonthAvailabilityMap;
   onMonthChange: (date: Date) => void;
   onDateSelect: (date: Date) => void;
 }
@@ -22,7 +22,7 @@ interface CalendarGridProps {
 export function CalendarGrid({
   currentMonth,
   selectedDate,
-  availability,
+  monthAvailability,
   onMonthChange,
   onDateSelect,
 }: CalendarGridProps) {
@@ -30,8 +30,6 @@ export function CalendarGrid({
   const year = currentMonth.getFullYear();
   const month = currentMonth.getMonth();
   const days = useMemo(() => getCalendarDays(year, month), [year, month]);
-
-  const availableDates = useMemo(() => new Set(Object.keys(availability)), [availability]);
 
   const handlePreviousMonth = useCallback(() => {
     onMonthChange(new Date(year, month - 1, 1));
@@ -41,10 +39,15 @@ export function CalendarGrid({
     onMonthChange(new Date(year, month + 1, 1));
   }, [year, month, onMonthChange]);
 
+  const isDateAvailable = useCallback(
+    (dateKey: string) => monthAvailability[dateKey] === true,
+    [monthAvailability],
+  );
+
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent, date: Date) => {
       const dateKey = formatDateKey(date);
-      if (!availableDates.has(dateKey)) return;
+      if (!isDateAvailable(dateKey)) return;
 
       let newDate: Date | null = null;
 
@@ -79,12 +82,12 @@ export function CalendarGrid({
         if (newDate.getMonth() !== month || newDate.getFullYear() !== year) {
           onMonthChange(new Date(newDate.getFullYear(), newDate.getMonth(), 1));
         }
-        if (availableDates.has(formatDateKey(newDate))) {
+        if (isDateAvailable(formatDateKey(newDate))) {
           onDateSelect(newDate);
         }
       }
     },
-    [availableDates, month, year, onDateSelect, onMonthChange],
+    [isDateAvailable, month, year, onDateSelect, onMonthChange],
   );
 
   return (
@@ -113,7 +116,7 @@ export function CalendarGrid({
         {days.map((date) => {
           const isCurrentMonth = date.getMonth() === month;
           const dateKey = formatDateKey(date);
-          const isAvailable = availableDates.has(dateKey);
+          const isAvailable = isDateAvailable(dateKey);
           const isSelected = selectedDate ? isSameDay(date, selectedDate) : false;
           const isToday = isSameDay(date, today);
 

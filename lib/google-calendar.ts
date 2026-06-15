@@ -1,15 +1,11 @@
 import { DateTime } from "luxon";
 import { isDayAvailable } from "@/lib/host-days";
+import type { BusyPeriod } from "@/lib/busy-cache";
 import { getCalendarForHost } from "@/lib/google-client";
 import { formatDisplayTime, parseTimeString } from "@/lib/time-utils";
 import type { BookingData } from "@/types/booking";
 import type { HostScheduleConfig } from "@/types/host";
-import type { AvailabilityMap } from "@/types/scheduling";
-
-interface BusyPeriod {
-  start: number;
-  end: number;
-}
+import type { MonthAvailabilityMap } from "@/types/scheduling";
 
 function parseDateKey(dateKey: string): { year: number; month: number; day: number } {
   const [year, month, day] = dateKey.split("-").map(Number);
@@ -64,16 +60,19 @@ function enumerateDateKeys(startDate: string, endDate: string): string[] {
   return keys;
 }
 
-async function fetchBusyPeriods(
+export async function fetchBusyPeriodsForRange(
   config: HostScheduleConfig,
-  timeMin: string,
-  timeMax: string,
+  startDate: string,
+  endDate: string,
 ): Promise<BusyPeriod[]> {
+  const rangeStart = DateTime.fromISO(startDate, { zone: config.timezone }).startOf("day");
+  const rangeEnd = DateTime.fromISO(endDate, { zone: config.timezone }).endOf("day");
+
   const calendar = getCalendarForHost(config.refreshToken);
   const response = await calendar.freebusy.query({
     requestBody: {
-      timeMin,
-      timeMax,
+      timeMin: rangeStart.toUTC().toISO()!,
+      timeMax: rangeEnd.toUTC().toISO()!,
       items: [{ id: config.calendarId }],
     },
   });
@@ -87,7 +86,45 @@ async function fetchBusyPeriods(
     }));
 }
 
-function generateSlotsForDay(
+export function isDayBookable(
+  dateKey: string,
+  config: HostScheduleConfig,
+  busy: BusyPeriod[],
+): boolean {
+  const dateInTz = DateTime.fromISO(dateKey, { zone: config.timezone });
+  if (!isDayAvailable(dateInTz.weekday, config.availableDays)) {
+    return false;
+  }
+
+  const { hours: workStartHour, minutes: workStartMinute } = parseTimeValue(
+    config.workingHoursStart,
+  );
+  const { hours: workEndHour, minutes: workEndMinute } = parseTimeValue(config.workingHoursEnd);
+
+  const workStartMinutes = workStartHour * 60 + workStartMinute;
+  const workEndMinutes = workEndHour * 60 + workEndMinute;
+  const slotDuration = config.meetingDurationMinutes;
+
+  for (let total = workStartMinutes; total + slotDuration <= workEndMinutes; total += slotDuration) {
+    const hour = Math.floor(total / 60);
+    const minute = total % 60;
+    const { start, end } = slotToUtcRange(
+      dateKey,
+      hour,
+      minute,
+      config.timezone,
+      slotDuration,
+    );
+
+    if (!overlapsBusy(start, end, busy)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+export function generateSlotsForDay(
   dateKey: string,
   config: HostScheduleConfig,
   busy: BusyPeriod[],
@@ -128,27 +165,16 @@ function generateSlotsForDay(
   return slots;
 }
 
-export async function getAvailability(
+export function buildMonthAvailability(
   config: HostScheduleConfig,
   startDate: string,
   endDate: string,
-): Promise<AvailabilityMap> {
-  const rangeStart = DateTime.fromISO(startDate, { zone: config.timezone }).startOf("day");
-  const rangeEnd = DateTime.fromISO(endDate, { zone: config.timezone }).endOf("day");
-
-  const busy = await fetchBusyPeriods(
-    config,
-    rangeStart.toUTC().toISO()!,
-    rangeEnd.toUTC().toISO()!,
-  );
-
-  const availability: AvailabilityMap = {};
+  busy: BusyPeriod[],
+): MonthAvailabilityMap {
+  const availability: MonthAvailabilityMap = {};
 
   for (const dateKey of enumerateDateKeys(startDate, endDate)) {
-    const slots = generateSlotsForDay(dateKey, config, busy);
-    if (slots.length > 0) {
-      availability[dateKey] = slots;
-    }
+    availability[dateKey] = isDayBookable(dateKey, config, busy);
   }
 
   return availability;
@@ -176,7 +202,7 @@ export async function isSlotAvailable(
   const rangeStart = DateTime.fromMillis(start).minus({ minutes: 1 }).toUTC().toISO()!;
   const rangeEnd = DateTime.fromMillis(end).plus({ minutes: 1 }).toUTC().toISO()!;
 
-  const busy = await fetchBusyPeriods(config, rangeStart, rangeEnd);
+  const busy = await fetchBusyPeriodsForRange(config, rangeStart.slice(0, 10), rangeEnd.slice(0, 10));
   return !overlapsBusy(start, end, busy);
 }
 

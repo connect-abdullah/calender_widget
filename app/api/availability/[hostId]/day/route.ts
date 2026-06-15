@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { fetchHostAvailability } from "@/lib/availability-service";
+import { fetchHostDaySlots } from "@/lib/availability-service";
 
 export async function GET(
   request: NextRequest,
@@ -7,26 +7,24 @@ export async function GET(
 ) {
   try {
     const { hostId } = await params;
-    const { searchParams } = request.nextUrl;
-    const start = searchParams.get("start");
-    const end = searchParams.get("end");
+    const date = request.nextUrl.searchParams.get("date");
 
-    if (!start || !end) {
+    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
       return NextResponse.json(
-        { message: "Missing required query params: start, end" },
+        { message: "Missing or invalid query param: date (YYYY-MM-DD)" },
         { status: 400 },
       );
     }
 
-    const availability = await fetchHostAvailability(hostId, start, end);
+    const slots = await fetchHostDaySlots(hostId, date);
 
-    return NextResponse.json(availability, {
+    return NextResponse.json(slots, {
       headers: {
         "Cache-Control": "private, max-age=60, stale-while-revalidate=120",
       },
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to fetch availability";
+    const message = error instanceof Error ? error.message : "Failed to fetch day slots";
     const status = message === "Host not found" ? 404 : 500;
     return NextResponse.json({ message }, { status });
   }
