@@ -76,7 +76,7 @@ export function MeetingInfoCard({ meeting, className }: MeetingInfoCardProps) {
 
   return (
     <aside
-      className={cn("flex flex-col gap-5 p-6 md:p-8", className)}
+      className={cn("flex flex-col gap-5 p-4 md:p-8", className)}
       aria-label="Meeting details"
     >
       <div className="flex h-10 w-10 items-center justify-center rounded-full bg-neutral-100 text-neutral-600">

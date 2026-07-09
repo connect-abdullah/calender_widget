@@ -5,7 +5,7 @@ export interface BusyPeriod {
   end: number;
 }
 
-const TTL_MS = 60_000;
+const TTL_MS = 300_000;
 
 interface BusyCacheEntry {
   busy: BusyPeriod[];

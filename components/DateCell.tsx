@@ -43,7 +43,7 @@ export function DateCell({
       onClick={() => !isDisabled && onSelect(date)}
       onKeyDown={(e) => onKeyDown(e, date)}
       className={cn(
-        "relative flex h-10 w-10 items-center justify-center rounded-full text-sm font-medium transition-colors",
+        "relative flex h-8 w-8 items-center justify-center rounded-full text-xs font-medium transition-colors sm:h-9 sm:w-9 sm:text-sm md:h-10 md:w-10",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2",
         !isCurrentMonth && "text-neutral-300",
         isCurrentMonth && !isAvailable && "cursor-not-allowed text-neutral-300",
@@ -58,7 +58,7 @@ export function DateCell({
       {day}
       {isAvailable && isCurrentMonth && !isSelected && (
         <span
-          className="absolute bottom-1 h-1 w-1 rounded-full bg-blue-500"
+          className="absolute bottom-0.5 h-0.5 w-0.5 rounded-full bg-blue-500 sm:bottom-1 sm:h-1 sm:w-1"
           aria-hidden="true"
         />
       )}

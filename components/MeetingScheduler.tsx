@@ -171,11 +171,15 @@ export function MeetingScheduler({
     "mx-auto w-full max-w-4xl overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-lg",
   );
 
+  const confirmationCardClassName = cn(
+    "mx-auto w-full max-w-md overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-lg",
+  );
+
   if (step === "confirmation" && confirmedBooking) {
     return (
       <div
         ref={containerRef}
-        className={cardClassName}
+        className={confirmationCardClassName}
         tabIndex={-1}
         aria-label="Booking confirmation"
       >
@@ -209,16 +213,16 @@ export function MeetingScheduler({
             animate="center"
             exit="exit"
             transition={{ duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] }}
-            className="flex flex-col md:flex-row"
+            className="flex min-w-0 flex-col md:flex-row"
           >
-            <div className="border-b border-neutral-200 md:w-[280px] md:shrink-0 md:border-b-0 md:border-r">
+            <div className="min-w-0 border-b border-neutral-200 md:w-[280px] md:shrink-0 md:border-b-0 md:border-r">
               <MeetingInfoCard meeting={meeting} />
             </div>
 
-            <div className="flex flex-1 flex-col md:flex-row">
+            <div className="flex min-w-0 flex-1 flex-col md:flex-row">
               <div
                 className={cn(
-                  "flex flex-1 flex-col p-6 md:p-8",
+                  "flex min-w-0 flex-1 flex-col p-4 md:p-8",
                   showTimePanel ? "md:border-r md:border-neutral-200" : "",
                 )}
               >
@@ -226,6 +230,7 @@ export function MeetingScheduler({
                   currentMonth={currentMonth}
                   selectedDate={selectedDate}
                   monthAvailability={monthAvailability}
+                  hostTimezone={defaultTimezone}
                   onMonthChange={setCurrentMonth}
                   onDateSelect={handleDateSelect}
                 />
@@ -299,7 +304,7 @@ export function MeetingScheduler({
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: 40 }}
                     transition={{ duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] }}
-                    className="w-full border-t border-neutral-200 p-6 md:w-[220px] md:shrink-0 md:border-t-0 md:p-8"
+                    className="w-full min-w-0 border-t border-neutral-200 p-4 md:w-[220px] md:shrink-0 md:border-t-0 md:p-8"
                     role="region"
                     aria-label="Available times"
                   >

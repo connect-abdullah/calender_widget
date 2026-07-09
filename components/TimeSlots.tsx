@@ -43,7 +43,7 @@ export function TimeSlots({
           No available times for this date.
         </p>
       ) : (
-        <ul className="flex max-h-[320px] flex-col gap-2 overflow-y-auto pr-1" role="list">
+        <ul className="flex max-h-[180px] flex-col gap-2 overflow-y-auto pr-1 sm:max-h-[240px] md:max-h-[320px]" role="list">
           {slots.map((time) => {
             const isSelected = selectedTime === time;
 
@@ -54,7 +54,7 @@ export function TimeSlots({
                   onClick={() => onTimeSelect(time)}
                   aria-pressed={isSelected}
                   className={cn(
-                    "w-full rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors",
+                    "w-full rounded-lg border px-3 py-2 text-xs font-medium transition-colors sm:px-4 sm:py-2.5 sm:text-sm",
                     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2",
                     isSelected
                       ? "border-blue-600 bg-blue-600 text-white"

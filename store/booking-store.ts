@@ -91,9 +91,9 @@ export const useBookingStore = create<BookingState>((set, get) => ({
     };
 
     try {
-      await submitBooking(hostId, bookingData);
+      const result = await submitBooking(hostId, bookingData);
       set({
-        confirmedBooking: bookingData,
+        confirmedBooking: { ...bookingData, meetLink: result.meetLink },
         step: "confirmation",
         isSubmitting: false,
       });

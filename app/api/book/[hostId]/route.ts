@@ -21,7 +21,7 @@ export async function POST(
     }
 
     const config = hostToScheduleConfig(host);
-    const result = await createBooking(config, body);
+    const result = await createBooking(hostId, config, body);
     return NextResponse.json(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to create booking";

@@ -24,6 +24,13 @@ export function getOAuthClientForHost(refreshToken: string) {
   return oauth2;
 }
 
+const calendarCache = new Map<string, ReturnType<typeof google.calendar>>();
+
 export function getCalendarForHost(refreshToken: string) {
-  return google.calendar({ version: "v3", auth: getOAuthClientForHost(refreshToken) });
+  let calendar = calendarCache.get(refreshToken);
+  if (!calendar) {
+    calendar = google.calendar({ version: "v3", auth: getOAuthClientForHost(refreshToken) });
+    calendarCache.set(refreshToken, calendar);
+  }
+  return calendar;
 }

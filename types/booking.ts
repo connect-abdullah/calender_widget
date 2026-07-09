@@ -8,6 +8,7 @@ export interface BookingData {
   email: string;
   guests: string[];
   notes?: string;
+  meetLink?: string;
 }
 
 export type { BookingFormSchema as BookingFormValues } from "@/lib/booking-schema";

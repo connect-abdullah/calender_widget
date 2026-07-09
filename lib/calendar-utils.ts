@@ -1,5 +1,7 @@
 import { clsx, type ClassValue } from "clsx";
+import { DateTime } from "luxon";
 import { twMerge } from "tailwind-merge";
+import { parseTimeString } from "@/lib/time-utils";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -51,3 +53,21 @@ export function formatMonthYear(date: Date): string {
 }
 
 export const WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+export function getTodayDateKey(timezone: string): string {
+  return DateTime.now().setZone(timezone).toFormat("yyyy-MM-dd");
+}
+
+export function isDateBeforeToday(dateKey: string, timezone: string): boolean {
+  return dateKey < getTodayDateKey(timezone);
+}
+
+export function isSlotInPast(dateKey: string, time: string, timezone: string): boolean {
+  const { hours, minutes } = parseTimeString(time);
+  const [year, month, day] = dateKey.split("-").map(Number);
+  const slotStart = DateTime.fromObject(
+    { year, month, day, hour: hours, minute: minutes },
+    { zone: timezone },
+  );
+  return slotStart <= DateTime.now().setZone(timezone);
+}

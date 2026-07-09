@@ -27,15 +27,17 @@ export function useHostMonthAvailability({
 }: UseHostMonthAvailabilityOptions) {
   const isPrefetchMonth =
     prefetchMonth?.year === year && prefetchMonth?.month === month;
+  const hasInitialData = isPrefetchMonth && !!initialMonthAvailability;
 
   return useQuery({
     queryKey: monthAvailabilityQueryKey(hostId ?? "", year, month),
     queryFn: () => fetchMonthAvailabilityClient(hostId!, year, month),
     enabled: !!hostId,
-    staleTime: 60_000,
+    staleTime: 300_000,
     gcTime: 5 * 60_000,
-    initialData:
-      isPrefetchMonth && initialMonthAvailability ? initialMonthAvailability : undefined,
+    refetchOnWindowFocus: false,
+    refetchOnMount: hasInitialData ? false : undefined,
+    initialData: hasInitialData ? initialMonthAvailability : undefined,
     placeholderData: (previous) => previous,
   });
 }
@@ -45,8 +47,9 @@ export function useDaySlots(hostId: string | undefined, dateKey: string | null) 
     queryKey: daySlotsQueryKey(hostId ?? "", dateKey ?? ""),
     queryFn: () => fetchDaySlotsClient(hostId!, dateKey!),
     enabled: !!hostId && !!dateKey,
-    staleTime: 60_000,
+    staleTime: 300_000,
     gcTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
   });
 }
 

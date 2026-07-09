@@ -1,14 +1,8 @@
 import "server-only";
-import { formatDateKey } from "@/lib/calendar-utils";
-import {
-  busyCacheKey,
-  findCachedBusyForDate,
-  getCachedBusy,
-  setCachedBusy,
-} from "@/lib/busy-cache";
+import { findCachedBusyForDate } from "@/lib/busy-cache";
+import { getOrFetchBusyForRange, monthRangeForDate } from "@/lib/busy-fetch";
 import {
   buildMonthAvailability,
-  fetchBusyPeriodsForRange,
   generateSlotsForDay,
 } from "@/lib/google-calendar";
 import { getHostById, hostToScheduleConfig } from "@/lib/hosts";
@@ -20,28 +14,6 @@ async function getHostConfig(hostId: string) {
     throw new Error("Host not found");
   }
   return hostToScheduleConfig(host);
-}
-
-async function getOrFetchBusyForRange(
-  hostId: string,
-  config: Awaited<ReturnType<typeof hostToScheduleConfig>>,
-  start: string,
-  end: string,
-) {
-  const key = busyCacheKey(hostId, start, end);
-  const cached = getCachedBusy(key);
-  if (cached) return cached;
-
-  const busy = await fetchBusyPeriodsForRange(config, start, end);
-  setCachedBusy(key, busy, start, end);
-  return busy;
-}
-
-function monthRangeForDate(dateKey: string) {
-  const [year, month] = dateKey.split("-").map(Number);
-  const start = formatDateKey(new Date(year, month - 1, 1));
-  const end = formatDateKey(new Date(year, month, 0));
-  return { start, end };
 }
 
 export async function fetchHostMonthAvailability(

@@ -3,7 +3,7 @@ import type { BookingData } from "@/types/booking";
 export async function submitBooking(
   hostId: string,
   data: BookingData,
-): Promise<{ eventId: string }> {
+): Promise<{ eventId: string; meetLink?: string }> {
   const res = await fetch(`/api/book/${hostId}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -15,5 +15,5 @@ export async function submitBooking(
     throw new Error(err.message ?? "Booking failed");
   }
 
-  return res.json() as Promise<{ eventId: string }>;
+  return res.json() as Promise<{ eventId: string; meetLink?: string }>;
 }

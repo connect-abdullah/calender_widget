@@ -1,11 +1,14 @@
 "use client";
 
 import { useCallback, useMemo } from "react";
+import { DateTime } from "luxon";
 import { CalendarHeader } from "@/components/CalendarHeader";
 import { DateCell } from "@/components/DateCell";
 import {
   formatDateKey,
   getCalendarDays,
+  getTodayDateKey,
+  isDateBeforeToday,
   isSameDay,
   WEEKDAY_LABELS,
 } from "@/lib/calendar-utils";
@@ -15,6 +18,7 @@ interface CalendarGridProps {
   currentMonth: Date;
   selectedDate: Date | null;
   monthAvailability: MonthAvailabilityMap;
+  hostTimezone: string;
   onMonthChange: (date: Date) => void;
   onDateSelect: (date: Date) => void;
 }
@@ -23,13 +27,19 @@ export function CalendarGrid({
   currentMonth,
   selectedDate,
   monthAvailability,
+  hostTimezone,
   onMonthChange,
   onDateSelect,
 }: CalendarGridProps) {
-  const today = useMemo(() => new Date(), []);
+  const todayKey = useMemo(() => getTodayDateKey(hostTimezone), [hostTimezone]);
   const year = currentMonth.getFullYear();
   const month = currentMonth.getMonth();
   const days = useMemo(() => getCalendarDays(year, month), [year, month]);
+
+  const isEarliestMonth = useMemo(() => {
+    const now = DateTime.now().setZone(hostTimezone);
+    return year === now.year && month === now.month - 1;
+  }, [hostTimezone, year, month]);
 
   const handlePreviousMonth = useCallback(() => {
     onMonthChange(new Date(year, month - 1, 1));
@@ -40,8 +50,9 @@ export function CalendarGrid({
   }, [year, month, onMonthChange]);
 
   const isDateAvailable = useCallback(
-    (dateKey: string) => monthAvailability[dateKey] === true,
-    [monthAvailability],
+    (dateKey: string) =>
+      !isDateBeforeToday(dateKey, hostTimezone) && monthAvailability[dateKey] === true,
+    [monthAvailability, hostTimezone],
   );
 
   const handleKeyDown = useCallback(
@@ -91,9 +102,10 @@ export function CalendarGrid({
   );
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex min-w-0 flex-col gap-4">
       <CalendarHeader
         currentMonth={currentMonth}
+        disablePreviousMonth={isEarliestMonth}
         onPreviousMonth={handlePreviousMonth}
         onNextMonth={handleNextMonth}
       />
@@ -101,13 +113,13 @@ export function CalendarGrid({
       <div
         role="grid"
         aria-labelledby="calendar-month-label"
-        className="grid grid-cols-7 gap-y-1"
+        className="grid grid-cols-7 gap-x-0.5 gap-y-1"
       >
         {WEEKDAY_LABELS.map((label) => (
           <div
             key={label}
             role="columnheader"
-            className="flex h-8 items-center justify-center text-xs font-medium text-neutral-500"
+            className="flex h-6 items-center justify-center text-[10px] font-medium text-neutral-500 sm:h-8 sm:text-xs"
           >
             {label}
           </div>
@@ -118,7 +130,7 @@ export function CalendarGrid({
           const dateKey = formatDateKey(date);
           const isAvailable = isDateAvailable(dateKey);
           const isSelected = selectedDate ? isSameDay(date, selectedDate) : false;
-          const isToday = isSameDay(date, today);
+          const isToday = dateKey === todayKey;
 
           return (
             <div key={dateKey + date.getMonth()} className="flex items-center justify-center">

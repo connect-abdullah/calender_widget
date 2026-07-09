@@ -2,12 +2,14 @@ import { cn } from "@/lib/utils";
 
 interface CalendarHeaderProps {
   currentMonth: Date;
+  disablePreviousMonth?: boolean;
   onPreviousMonth: () => void;
   onNextMonth: () => void;
 }
 
 export function CalendarHeader({
   currentMonth,
+  disablePreviousMonth = false,
   onPreviousMonth,
   onNextMonth,
 }: CalendarHeaderProps) {
@@ -30,10 +32,12 @@ export function CalendarHeader({
         <button
           type="button"
           onClick={onPreviousMonth}
+          disabled={disablePreviousMonth}
           className={cn(
             "flex h-8 w-8 items-center justify-center rounded-full",
             "text-neutral-600 transition-colors",
             "hover:bg-neutral-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2",
+            disablePreviousMonth && "cursor-not-allowed opacity-40 hover:bg-transparent",
           )}
           aria-label="Previous month"
         >

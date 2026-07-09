@@ -1,4 +1,6 @@
 import { DateTime } from "luxon";
+import { getOrFetchBusyForRange, monthRangeForDate } from "@/lib/busy-fetch";
+import { isDateBeforeToday, isSlotInPast } from "@/lib/calendar-utils";
 import { isDayAvailable } from "@/lib/host-days";
 import type { BusyPeriod } from "@/lib/busy-cache";
 import { getCalendarForHost } from "@/lib/google-client";
@@ -91,6 +93,10 @@ export function isDayBookable(
   config: HostScheduleConfig,
   busy: BusyPeriod[],
 ): boolean {
+  if (isDateBeforeToday(dateKey, config.timezone)) {
+    return false;
+  }
+
   const dateInTz = DateTime.fromISO(dateKey, { zone: config.timezone });
   if (!isDayAvailable(dateInTz.weekday, config.availableDays)) {
     return false;
@@ -104,10 +110,21 @@ export function isDayBookable(
   const workStartMinutes = workStartHour * 60 + workStartMinute;
   const workEndMinutes = workEndHour * 60 + workEndMinute;
   const slotDuration = config.meetingDurationMinutes;
+  const now = DateTime.now().setZone(config.timezone);
 
   for (let total = workStartMinutes; total + slotDuration <= workEndMinutes; total += slotDuration) {
     const hour = Math.floor(total / 60);
     const minute = total % 60;
+
+    const { year, month, day } = parseDateKey(dateKey);
+    const slotStart = DateTime.fromObject(
+      { year, month, day, hour, minute },
+      { zone: config.timezone },
+    );
+    if (slotStart <= now) {
+      continue;
+    }
+
     const { start, end } = slotToUtcRange(
       dateKey,
       hour,
@@ -129,6 +146,10 @@ export function generateSlotsForDay(
   config: HostScheduleConfig,
   busy: BusyPeriod[],
 ): string[] {
+  if (isDateBeforeToday(dateKey, config.timezone)) {
+    return [];
+  }
+
   const dateInTz = DateTime.fromISO(dateKey, { zone: config.timezone });
   if (!isDayAvailable(dateInTz.weekday, config.availableDays)) {
     return [];
@@ -142,12 +163,22 @@ export function generateSlotsForDay(
   const workStartMinutes = workStartHour * 60 + workStartMinute;
   const workEndMinutes = workEndHour * 60 + workEndMinute;
   const slotDuration = config.meetingDurationMinutes;
+  const now = DateTime.now().setZone(config.timezone);
 
   const slots: string[] = [];
 
   for (let total = workStartMinutes; total + slotDuration <= workEndMinutes; total += slotDuration) {
     const hour = Math.floor(total / 60);
     const minute = total % 60;
+
+    const { year, month, day } = parseDateKey(dateKey);
+    const slotStart = DateTime.fromObject(
+      { year, month, day, hour, minute },
+      { zone: config.timezone },
+    );
+    if (slotStart <= now) {
+      continue;
+    }
 
     const { start, end } = slotToUtcRange(
       dateKey,
@@ -181,10 +212,19 @@ export function buildMonthAvailability(
 }
 
 export async function isSlotAvailable(
+  hostId: string,
   config: HostScheduleConfig,
   dateKey: string,
   time: string,
 ): Promise<boolean> {
+  if (isDateBeforeToday(dateKey, config.timezone)) {
+    return false;
+  }
+
+  if (isSlotInPast(dateKey, time, config.timezone)) {
+    return false;
+  }
+
   const dateInTz = DateTime.fromISO(dateKey, { zone: config.timezone });
   if (!isDayAvailable(dateInTz.weekday, config.availableDays)) {
     return false;
@@ -199,20 +239,19 @@ export async function isSlotAvailable(
     config.meetingDurationMinutes,
   );
 
-  const rangeStart = DateTime.fromMillis(start).minus({ minutes: 1 }).toUTC().toISO()!;
-  const rangeEnd = DateTime.fromMillis(end).plus({ minutes: 1 }).toUTC().toISO()!;
-
-  const busy = await fetchBusyPeriodsForRange(config, rangeStart.slice(0, 10), rangeEnd.slice(0, 10));
+  const { start: monthStart, end: monthEnd } = monthRangeForDate(dateKey);
+  const busy = await getOrFetchBusyForRange(hostId, config, monthStart, monthEnd);
   return !overlapsBusy(start, end, busy);
 }
 
 export async function createBooking(
+  hostId: string,
   config: HostScheduleConfig,
   data: BookingData,
-): Promise<{ eventId: string }> {
+): Promise<{ eventId: string; meetLink?: string }> {
   const calendar = getCalendarForHost(config.refreshToken);
 
-  const available = await isSlotAvailable(config, data.date, data.time);
+  const available = await isSlotAvailable(hostId, config, data.date, data.time);
   if (!available) {
     throw new Error("This time slot is no longer available. Please choose another time.");
   }
@@ -233,6 +272,7 @@ export async function createBooking(
 
   const response = await calendar.events.insert({
     calendarId: config.calendarId,
+    conferenceDataVersion: 1,
     sendUpdates: "all",
     requestBody: {
       summary: config.meetingTitle ?? `${config.meetingDurationMinutes} Minute Meeting`,
@@ -240,6 +280,12 @@ export async function createBooking(
       start: { dateTime: startIso, timeZone: data.timezone },
       end: { dateTime: endIso, timeZone: data.timezone },
       attendees,
+      conferenceData: {
+        createRequest: {
+          requestId: crypto.randomUUID(),
+          conferenceSolutionKey: { type: "hangoutsMeet" },
+        },
+      },
     },
   });
 
@@ -248,5 +294,10 @@ export async function createBooking(
     throw new Error("Failed to create calendar event");
   }
 
-  return { eventId };
+  const meetLink =
+    response.data.hangoutLink ??
+    response.data.conferenceData?.entryPoints?.find((e) => e.entryPointType === "video")?.uri ??
+    undefined;
+
+  return { eventId, meetLink };
 }
